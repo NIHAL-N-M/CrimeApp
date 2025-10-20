@@ -1,6 +1,8 @@
 # Streamlit Cloud Requirements (pinned for compatibility)
 streamlit==1.33.0
-opencv-python-headless==4.8.1.78
+opencv-python-headless==4.7.0.72
 numpy==1.26.4
 Pillow==10.2.0
 pandas==2.1.4
+protobuf==4.25.3
+typing_extensions==4.9.0
