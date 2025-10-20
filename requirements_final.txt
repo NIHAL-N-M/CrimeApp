@@ -1,0 +1,27 @@
+# Face Recognition Challenge - Final Requirements
+# Core dependencies that work with Python 3.13
+
+# Computer Vision and Image Processing
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+numpy>=1.24.0
+Pillow>=9.0.0
+
+# Database connectivity
+pymysql>=1.0.0
+mysql-connector-python>=8.0.0
+
+# GUI and Video
+tkVideo>=0.1.0
+
+# Web framework (optional)
+streamlit>=1.28.0
+Django>=4.2.0
+
+# HTTP and parsing
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+
+# Note: dlib and face-recognition are not included due to compilation issues
+# The application will work with OpenCV's built-in face detection
+
