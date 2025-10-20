@@ -73,52 +73,6 @@ Python MySQL Connector is a Python driver that helps to integrate Python and MyS
 6. Run the main python file `python or python3 main.py`.
 7. Now experience the GUI and features of the project.
 
-## Glimpse of my Application 💁🏻‍♀️
-
-**Login Page**            |  **Sign-Up Page**
-:-------------------------:|:-------------------------:
-![](https://user-images.githubusercontent.com/81081105/170031961-682d7f02-45e0-47b0-b8de-12fbb8576287.png)  |  ![](https://user-images.githubusercontent.com/81081105/170031999-d0f4ab21-aec8-4020-9466-d08fbf346321.png)
-
-**Home Page** 
-
-<img width="800" alt="Screenshot 2022-05-24 at 11 09 27 PM" src="https://user-images.githubusercontent.com/81081105/170098347-9f328ba0-4f63-4f26-968c-395b1c20663f.png">
-
-**Criminal Detection**            |  **Finding Missing People**
-:-------------------------:|:-------------------------:
-<img width="600" alt="Screenshot 2022-05-24 at 11 14 45 PM" src="https://user-images.githubusercontent.com/81081105/170099565-dfc2e897-3602-4678-9ce0-592c24649e5a.png">  |  <img width="600" alt="Screenshot 2022-05-24 at 11 19 00 PM" src="https://user-images.githubusercontent.com/81081105/170100191-829547af-66b5-4cc1-9d42-c8ea06a16556.png">
-
-
-**Register Criminal**            |  **Register Missing Person**
-:-------------------------:|:-------------------------:
-<img width="600" alt="Screenshot 2022-05-28 at 4 03 16 PM" src="https://user-images.githubusercontent.com/81081105/170822969-67fe0d7a-180c-4874-a36b-86174425e720.png"> | <img width="600" alt="Screenshot 2022-05-28 at 4 16 37 PM" src="https://user-images.githubusercontent.com/81081105/170822906-0a180413-3c15-42f8-b434-7dfdd2932b7c.png"> 
-
-**Image Observation**      |  **Image Observation**
-:-------------------------:|:-------------------------:
-<img width="600" alt="Screenshot 2022-05-28 at 4 19 33 PM" src="https://user-images.githubusercontent.com/81081105/170823024-4f6c3432-8eca-4e9e-8d57-458a2728fc6b.png">  |  <img width="600" alt="Screenshot 2022-05-28 at 4 17 09 PM" src="https://user-images.githubusercontent.com/81081105/170823029-a3c15dd6-279d-40f4-9862-43cce47609a6.png">
-
-<!-- **Video Observation**      |  **Video Observation**
-:-------------------------:|:-------------------------:
-https://user-images.githubusercontent.com/81081105/170838208-4eea8b95-a8a3-428b-bab0-176e9377cad4.mp4  | https://user-images.githubusercontent.com/81081105/170838232-701ca29d-2477-44db-a097-f01f62b42f51.mp4 -->
-
-
-**Alerts**                 |  **Alerts**    
-:-------------------------:|:-------------------------:
-<img width="600" alt="Screenshot 2022-05-28 at 11 24 19 PM" src="https://user-images.githubusercontent.com/81081105/170837323-d9ddf905-e837-43e5-ac43-7036eed7b653.png"> | <img width="600" alt="Screenshot 2022-05-28 at 4 20 32 PM" src="https://user-images.githubusercontent.com/81081105/170837045-d021aea3-cf91-4dd6-8446-344f8fbf680e.png">  
-
-**Alerts**                 | **Alerts**    
-:-------------------------:|:-------------------------:
-<img width="600" alt="Screenshot 2022-05-28 at 11 25 17 PM" src="https://user-images.githubusercontent.com/81081105/170837354-d99b0d47-0163-46f0-9432-e73ed613f381.png"> |  <img width="600" alt="Screenshot 2022-05-28 at 4 21 54 PM" src="https://user-images.githubusercontent.com/81081105/170837081-a88f4599-b149-4a41-81c8-3c309ee7c65d.png">
-
-
-**Terminal Output**
-
-<img width="1152" alt="Screenshot 2022-05-28 at 4 35 31 PM" src="https://user-images.githubusercontent.com/81081105/170837449-361ae831-e024-40b0-9413-a1bc0fa94a35.png">
-
-
-**Note:** If you might face the error of `segmentation fault` in your system then you must follow this two steps to run the project correctly.
-
-1. comment the line 31 in `main.py` file.
-2. Uncomment the lines 296, 297 and 302 in `main.py` file also uncomment that complete mainfuntion in `main.py` file.  
 
 <!---
 ## Added Webcam Support for real time detection
