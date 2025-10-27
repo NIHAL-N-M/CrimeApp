@@ -78,8 +78,8 @@ def recognize_faces_in_frame(model, names, frame):
     # Convert to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
-    # Detect faces
-    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
+    # Detect faces with more sensitive parameters
+    faces = face_cascade.detectMultiScale(gray, 1.1, 4)
     
     recognized_persons = []
     
@@ -94,9 +94,11 @@ def recognize_faces_in_frame(model, names, frame):
         # Predict
         try:
             label, confidence = model.predict(face_resized)
+            print(f"Prediction: label={label}, confidence={confidence}, names={names}")
             
-            # Lower confidence = better match
-            if confidence < 95 and label in names:
+            # Lower confidence = better match (LBPH returns 0 for perfect match)
+            # Use more lenient threshold for better recognition
+            if confidence < 100 and label in names:
                 person_name = names[label]
                 recognized_persons.append({
                     'name': person_name,
