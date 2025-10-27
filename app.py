@@ -683,10 +683,10 @@ def criminal_detection_page():
         cursor = conn.cursor()
         
         # Get criminal statistics
-        cursor.execute("SELECT COUNT(*) FROM criminaldata WHERE crimes_done IS NOT NULL")
+        cursor.execute("SELECT COUNT(*) FROM criminaldata WHERE crimes_done IS NOT NULL AND crimes_done != ''")
         with_crimes = cursor.fetchone()[0]
         
-        cursor.execute("SELECT COUNT(*) FROM criminaldata WHERE date_of_arrest IS NOT NULL")
+        cursor.execute("SELECT COUNT(*) FROM criminaldata WHERE date_of_arrest IS NOT NULL AND date_of_arrest != ''")
         arrested = cursor.fetchone()[0]
         
         conn.close()
@@ -756,7 +756,9 @@ def check_criminal_database(faces, image):
     # Perform face recognition
     with st.spinner("🤖 Performing face recognition..."):
         try:
+            st.info(f"🔍 Training data includes: {list(names.values())}")
             (result_frame, recognized) = recognize_face(model, opencv_image, gray_image, face_coords, names)
+            st.info(f"🎯 Recognition results: {recognized}")
             
             # Convert result back to RGB for display
             result_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
@@ -775,7 +777,7 @@ def check_criminal_database(faces, image):
                     # Get detailed criminal information
                     cursor.execute("""
                         SELECT name, crimes_done, date_of_arrest, place_of_arrest, 
-                               age, gender, description, last_known_location
+                               gender, address, phone, fathers_name, dob
                         FROM criminaldata 
                         WHERE name = ?
                     """, (criminal_name,))
@@ -801,10 +803,11 @@ def check_criminal_database(faces, image):
                         - **Crimes:** {criminal_info[1] or 'Not specified'}
                         - **Arrest Date:** {criminal_info[2] or 'Not specified'}
                         - **Arrest Location:** {criminal_info[3] or 'Not specified'}
-                        - **Age:** {criminal_info[4] or 'Not specified'}
-                        - **Gender:** {criminal_info[5] or 'Not specified'}
-                        - **Description:** {criminal_info[6] or 'Not specified'}
-                        - **Last Known Location:** {criminal_info[7] or 'Not specified'}
+                        - **Gender:** {criminal_info[4] or 'Not specified'}
+                        - **Address:** {criminal_info[5] or 'Not specified'}
+                        - **Phone:** {criminal_info[6] or 'Not specified'}
+                        - **Father's Name:** {criminal_info[7] or 'Not specified'}
+                        - **Date of Birth:** {criminal_info[8] or 'Not specified'}
                         """)
                         
                         # Show action buttons
