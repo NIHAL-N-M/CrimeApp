@@ -615,7 +615,7 @@ def criminal_detection_page():
         
         if uploaded_file is not None:
             image = Image.open(uploaded_file)
-            st.image(image, caption="📷 Uploaded Image", use_column_width=True)
+            st.image(image, caption="📷 Uploaded Image", use_container_width=True)
             
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
@@ -632,7 +632,7 @@ def criminal_detection_page():
                             
                             # Convert back to RGB for display
                             result_image = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2RGB)
-                            st.image(result_image, caption="🎯 Face Detection Result", use_column_width=True)
+                            st.image(result_image, caption="🎯 Face Detection Result", use_container_width=True)
                             
                             # Check against criminal database
                             check_criminal_database(faces, opencv_image)
@@ -804,7 +804,7 @@ def missing_people_page():
         
         if uploaded_file is not None:
             image = Image.open(uploaded_file)
-            st.image(image, caption="📷 Uploaded Image", use_column_width=True)
+            st.image(image, caption="📷 Uploaded Image", use_container_width=True)
             
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
@@ -821,7 +821,7 @@ def missing_people_page():
                             
                             # Convert back to RGB for display
                             result_image = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2RGB)
-                            st.image(result_image, caption="🎯 Face Detection Result", use_column_width=True)
+                            st.image(result_image, caption="🎯 Face Detection Result", use_container_width=True)
                             
                             # Check against missing people database
                             check_missing_database(faces, opencv_image)
@@ -899,7 +899,7 @@ def realtime_recognition_page():
             img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
             # Display captured image
-            st.image(picture, caption="📷 Captured Image", use_column_width=True)
+            st.image(picture, caption="📷 Captured Image", use_container_width=True)
             
             # Recognize faces
             if st.button("🔍 Recognize Faces", use_container_width=True):
@@ -914,7 +914,7 @@ def realtime_recognition_page():
                         
                         # Convert back to RGB for display
                         result_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
-                        st.image(result_rgb, caption="🎯 Recognition Result", use_column_width=True)
+                        st.image(result_rgb, caption="🎯 Recognition Result", use_container_width=True)
                         
                         # Show recognition results
                         if recognized:
