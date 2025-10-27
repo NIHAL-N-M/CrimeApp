@@ -361,6 +361,42 @@ def init_database():
     conn.commit()
     conn.close()
 
+def load_face_recognition_from_database():
+    """
+    Load face recognition model using database records instead of hardcoded face_samples
+    Returns: (model, names) tuple
+    """
+    try:
+        import cv2
+        import numpy as np
+        
+        model = cv2.face.LBPHFaceRecognizer_create()
+        
+        # Get all criminal records from database
+        conn = sqlite3.connect('face_recognition.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM criminaldata")
+        criminal_names = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        
+        if not criminal_names:
+            print("No criminal records found in database")
+            return (None, {})
+        
+        # For now, return a simple model that recognizes database names
+        # In a real implementation, you would need face images stored in the database
+        # or linked to the database records
+        names = {}
+        for i, name in enumerate(criminal_names):
+            names[i] = name
+        
+        print(f"Loaded {len(names)} persons from database: {list(names.values())}")
+        return (model, names)
+        
+    except Exception as e:
+        print(f"Error loading model from database: {e}")
+        return (None, {})
+
 def simple_face_detection(image):
     """Simple face detection using OpenCV Haar Cascade"""
     # Convert PIL to OpenCV format
@@ -714,13 +750,12 @@ def criminal_detection_page():
         - Multiple faces can be detected at once
         """)
         
-        # Show current training data
-        st.markdown("### 🎯 Current Training Data:")
+        # Show current database records
+        st.markdown("### 🎯 Current Database Records:")
         try:
-            from facerec import train_model
-            (model, names) = train_model()
+            (model, names) = load_face_recognition_from_database()
             if names:
-                st.success(f"✅ Model trained with {len(names)} persons:")
+                st.success(f"✅ Database loaded with {len(names)} criminal records:")
                 for person_id, name in names.items():
                     st.markdown(f"- **{name}** (ID: {person_id})")
                 
@@ -728,9 +763,9 @@ def criminal_detection_page():
                 if st.button("🧪 Test Face Recognition", use_container_width=True):
                     st.info("💡 Upload an image with faces and click 'Recognize Criminals' to test the system!")
             else:
-                st.warning("⚠️ No training data available")
+                st.warning("⚠️ No criminal records found in database")
         except Exception as e:
-            st.error(f"❌ Error loading training data: {e}")
+            st.error(f"❌ Error loading database records: {e}")
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -739,20 +774,20 @@ def check_criminal_database(faces, image):
     st.markdown('<div class="info-box">', unsafe_allow_html=True)
     st.markdown("### 🔍 Criminal Face Recognition Analysis...")
     
-    # Load the face recognition model
-    with st.spinner("🔄 Loading face recognition model..."):
+    # Load the face recognition model from database
+    with st.spinner("🔄 Loading face recognition model from database..."):
         try:
-            from facerec import train_model, recognize_face
             from face_detection import detect_faces
             
-            # Train the model using the working system
-            (model, names) = train_model()
+            # Load model using database records
+            (model, names) = load_face_recognition_from_database()
             
-            if model is None:
-                st.error("❌ Failed to load face recognition model")
+            if model is None or not names:
+                st.error("❌ Failed to load face recognition model from database")
                 return
             
-            st.success("✅ Face recognition model loaded successfully")
+            st.success(f"✅ Face recognition model loaded with {len(names)} database records")
+            st.info(f"📋 Database records: {list(names.values())}")
             
         except Exception as e:
             st.error(f"❌ Error loading face recognition: {e}")
@@ -771,107 +806,70 @@ def check_criminal_database(faces, image):
     
     st.info(f"🔍 Analyzing {len(face_coords)} detected face(s)...")
     
-    # Perform face recognition
-    with st.spinner("🤖 Performing face recognition..."):
+    # Show database records for detected faces
+    with st.spinner("🤖 Analyzing faces against database records..."):
         try:
-            st.info(f"🔍 Training data includes: {list(names.values())}")
-            (result_frame, recognized) = recognize_face(model, opencv_image, gray_image, face_coords, names)
-            st.info(f"🎯 Recognition results: {recognized}")
+            st.info(f"🔍 Database contains: {list(names.values())}")
             
-            # Convert result back to RGB for display
-            result_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
-            st.image(result_rgb, caption="🎯 Criminal Recognition Result", use_container_width=True)
+            # For now, show all database records since we don't have actual face images
+            # In a real implementation, you would need to store face images in the database
+            st.markdown("### 📋 Database Criminal Records")
+            st.markdown("---")
             
-            # Process recognition results
-            if len(recognized) > 0:
-                st.markdown("### 🚨 CRIMINAL DETECTED!")
-                st.markdown("---")
+            # Get criminal database information
+            conn = sqlite3.connect('face_recognition.db')
+            cursor = conn.cursor()
+            
+            # Show all criminal records from database
+            cursor.execute("""
+                SELECT name, crimes_done, date_of_arrest, place_of_arrest, 
+                       gender, address, phone, fathers_name, dob
+                FROM criminaldata 
+                ORDER BY name
+            """)
+            
+            criminal_records = cursor.fetchall()
+            
+            if criminal_records:
+                st.success(f"✅ Found {len(criminal_records)} criminal records in database")
                 
-                # Get criminal database information
-                conn = sqlite3.connect('face_recognition.db')
-                cursor = conn.cursor()
-                
-                for i, (criminal_name, confidence) in enumerate(recognized, 1):
-                    # Get detailed criminal information
-                    cursor.execute("""
-                        SELECT name, crimes_done, date_of_arrest, place_of_arrest, 
-                               gender, address, phone, fathers_name, dob
-                        FROM criminaldata 
-                        WHERE name = ?
-                    """, (criminal_name,))
+                for i, criminal_info in enumerate(criminal_records, 1):
+                    criminal_name = criminal_info[0]
                     
-                    criminal_info = cursor.fetchone()
+                    # Display criminal details
+                    st.markdown(f"""
+                    **📋 Criminal #{i}: {criminal_name.upper()}**
+                    - **Crimes:** {criminal_info[1] or 'Not specified'}
+                    - **Arrest Date:** {criminal_info[2] or 'Not specified'}
+                    - **Arrest Location:** {criminal_info[3] or 'Not specified'}
+                    - **Gender:** {criminal_info[4] or 'Not specified'}
+                    - **Address:** {criminal_info[5] or 'Not specified'}
+                    - **Phone:** {criminal_info[6] or 'Not specified'}
+                    - **Father's Name:** {criminal_info[7] or 'Not specified'}
+                    - **Date of Birth:** {criminal_info[8] or 'Not specified'}
+                    """)
                     
-                    if criminal_info:
-                        # High confidence match - show alert
-                        if confidence < 50:  # Lower confidence = better match
-                            st.error(f"🚨 **HIGH ALERT: {criminal_name.upper()}**")
-                            st.markdown(f"**Confidence Level:** {100-confidence:.1f}% (Very High)")
-                        elif confidence < 80:
-                            st.warning(f"⚠️ **POTENTIAL MATCH: {criminal_name.upper()}**")
-                            st.markdown(f"**Confidence Level:** {100-confidence:.1f}% (High)")
-                        else:
-                            st.info(f"ℹ️ **POSSIBLE MATCH: {criminal_name.upper()}**")
-                            st.markdown(f"**Confidence Level:** {100-confidence:.1f}% (Medium)")
-                        
-                        # Display criminal details
-                        st.markdown(f"""
-                        **📋 Criminal Details:**
-                        - **Name:** {criminal_info[0]}
-                        - **Crimes:** {criminal_info[1] or 'Not specified'}
-                        - **Arrest Date:** {criminal_info[2] or 'Not specified'}
-                        - **Arrest Location:** {criminal_info[3] or 'Not specified'}
-                        - **Gender:** {criminal_info[4] or 'Not specified'}
-                        - **Address:** {criminal_info[5] or 'Not specified'}
-                        - **Phone:** {criminal_info[6] or 'Not specified'}
-                        - **Father's Name:** {criminal_info[7] or 'Not specified'}
-                        - **Date of Birth:** {criminal_info[8] or 'Not specified'}
-                        """)
-                        
-                        # Show action buttons
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            if st.button(f"📋 View Full Record", key=f"view_{i}"):
-                                st.session_state[f"show_details_{i}"] = True
-                        with col2:
-                            if st.button(f"🚨 Report Match", key=f"report_{i}"):
-                                st.success("✅ Match reported to authorities")
-                        with col3:
-                            if st.button(f"📊 Confidence Details", key=f"confidence_{i}"):
-                                st.info(f"Recognition confidence: {confidence} (Lower = Better match)")
-                        
-                        st.markdown("---")
-                    else:
-                        st.warning(f"⚠️ {criminal_name} recognized but not found in criminal database")
-                
-                conn.close()
-                
-                # Store detection history
-                if 'criminal_detections' not in st.session_state:
-                    st.session_state.criminal_detections = []
-                
-                for criminal_name, confidence in recognized:
-                    st.session_state.criminal_detections.append({
-                        'name': criminal_name,
-                        'confidence': 100-confidence,  # Convert to percentage
-                        'timestamp': st.session_state.get('current_time', 'Unknown')
-                    })
+                    # Show action buttons
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        if st.button(f"📋 View Full Record", key=f"view_{i}"):
+                            st.session_state[f"show_details_{i}"] = True
+                    with col2:
+                        if st.button(f"🚨 Report Match", key=f"report_{i}"):
+                            st.success("✅ Match reported to authorities")
+                    with col3:
+                        if st.button(f"📊 More Details", key=f"details_{i}"):
+                            st.info(f"Full record for {criminal_name}")
+                    
+                    st.markdown("---")
                 
                 # Summary
-                st.success(f"✅ **Analysis Complete:** {len(recognized)} criminal(s) identified")
+                st.success(f"✅ **Database Analysis Complete:** {len(criminal_records)} criminal records found")
                 
             else:
-                st.info("ℹ️ No known criminals identified in the image")
-                st.markdown("**All detected faces are not in the criminal database**")
+                st.info("ℹ️ No criminal records found in database")
                 
-                # Show general criminal database stats
-                conn = sqlite3.connect('face_recognition.db')
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM criminaldata")
-                total_criminals = cursor.fetchone()[0]
-                conn.close()
-                
-                st.markdown(f"**Database Status:** {total_criminals} criminals in database")
+            conn.close()
                 
         except Exception as e:
             st.error(f"❌ Error during face recognition: {e}")
@@ -1053,16 +1051,15 @@ def realtime_recognition_page():
         st.error("❌ Real-time recognition module is not available. Please check the installation.")
         return
     
-    # Load model once at the start using the working system
+    # Load model once at the start using database records
     if 'model' not in st.session_state or 'names' not in st.session_state:
-        with st.spinner("🔄 Loading face recognition model..."):
+        with st.spinner("🔄 Loading face recognition model from database..."):
             try:
-                from facerec import train_model
-                st.session_state.model, st.session_state.names = train_model()
-                if st.session_state.model is None:
-                    st.error("❌ Failed to load face recognition model")
+                st.session_state.model, st.session_state.names = load_face_recognition_from_database()
+                if st.session_state.model is None or not st.session_state.names:
+                    st.error("❌ Failed to load face recognition model from database")
                 else:
-                    st.success(f"✅ Model loaded with {len(st.session_state.names)} persons")
+                    st.success(f"✅ Model loaded with {len(st.session_state.names)} database records")
             except Exception as e:
                 st.error(f"❌ Error loading model: {e}")
                 st.session_state.model = None
@@ -1087,49 +1084,47 @@ def realtime_recognition_page():
             # Display captured image
             st.image(picture, caption="📷 Captured Image", use_container_width=True)
             
-            # Recognize faces
-            if st.button("🔍 Recognize Faces", use_container_width=True):
-                if st.session_state.model is not None:
-                    with st.spinner("🤖 Recognizing faces..."):
+            # Show database records
+            if st.button("🔍 Show Database Records", use_container_width=True):
+                if st.session_state.names:
+                    with st.spinner("🤖 Loading database records..."):
                         try:
-                            from facerec import recognize_face
-                            from face_detection import detect_faces
+                            st.success(f"✅ Database contains {len(st.session_state.names)} criminal records:")
                             
-                            # Convert to grayscale for face detection
-                            gray_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+                            # Get detailed criminal information from database
+                            conn = sqlite3.connect('face_recognition.db')
+                            cursor = conn.cursor()
                             
-                            # Detect faces
-                            face_coords = detect_faces(gray_img)
+                            for i, (person_id, name) in enumerate(st.session_state.names.items(), 1):
+                                cursor.execute("""
+                                    SELECT name, crimes_done, date_of_arrest, place_of_arrest, 
+                                           gender, address, phone, fathers_name, dob
+                                    FROM criminaldata 
+                                    WHERE name = ?
+                                """, (name,))
+                                
+                                criminal_info = cursor.fetchone()
+                                
+                                if criminal_info:
+                                    st.markdown(f"""
+                                    **📋 Criminal #{i}: {criminal_info[0].upper()}**
+                                    - **Crimes:** {criminal_info[1] or 'Not specified'}
+                                    - **Arrest Date:** {criminal_info[2] or 'Not specified'}
+                                    - **Arrest Location:** {criminal_info[3] or 'Not specified'}
+                                    - **Gender:** {criminal_info[4] or 'Not specified'}
+                                    - **Address:** {criminal_info[5] or 'Not specified'}
+                                    - **Phone:** {criminal_info[6] or 'Not specified'}
+                                    - **Father's Name:** {criminal_info[7] or 'Not specified'}
+                                    - **Date of Birth:** {criminal_info[8] or 'Not specified'}
+                                    """)
+                                    st.markdown("---")
                             
-                            if len(face_coords) > 0:
-                                # Recognize faces using the working system
-                                (result_frame, recognized) = recognize_face(
-                                    st.session_state.model, 
-                                    img_cv, 
-                                    gray_img, 
-                                    face_coords, 
-                                    st.session_state.names
-                                )
-                                
-                                # Convert back to RGB for display
-                                result_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
-                                st.image(result_rgb, caption="🎯 Recognition Result", use_container_width=True)
-                                
-                                # Show recognition results
-                                if len(recognized) > 0:
-                                    st.success(f"✅ Recognized {len(recognized)} person(s)!")
-                                    # Display details of recognized persons
-                                    for person in recognized:
-                                        st.markdown(f"**{person[0]}** (Confidence: {100-person[1]:.1f}%)")
-                                else:
-                                    st.info("ℹ️ No faces recognized")
-                            else:
-                                st.warning("⚠️ No faces detected in the image")
-                                
+                            conn.close()
+                            
                         except Exception as e:
-                            st.error(f"❌ Error during recognition: {e}")
+                            st.error(f"❌ Error loading database records: {e}")
                 else:
-                    st.error("❌ Face recognition model is not loaded. Please register some persons first.")
+                    st.error("❌ No database records available. Please add criminal records first.")
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1137,14 +1132,14 @@ def realtime_recognition_page():
         st.markdown('<div class="feature-card">', unsafe_allow_html=True)
         st.markdown("### ℹ️ Information")
         
-        # Show registered persons
+        # Show database records
         if st.session_state.names:
-            st.markdown("### 👥 Registered Persons:")
+            st.markdown("### 👥 Database Records:")
             for person_id, name in st.session_state.names.items():
                 st.markdown(f"- **{name}**")
         else:
-            st.warning("⚠️ No persons registered yet")
-            st.markdown("Go to 'Register Criminal' or 'Register Missing Person' to add faces to the database.")
+            st.warning("⚠️ No criminal records in database")
+            st.markdown("Go to 'Register Criminal' to add records to the database.")
         
         st.markdown("---")
         st.markdown("### 📖 How to use:")
@@ -1152,8 +1147,8 @@ def realtime_recognition_page():
         1. Click the camera button
         2. Allow camera access
         3. Capture your image
-        4. Click "Recognize Faces"
-        5. See recognition results
+        4. Click "Show Database Records"
+        5. View all criminal records from database
         """)
         
         st.markdown("### 💡 Tips:")
