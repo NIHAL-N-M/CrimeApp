@@ -14,6 +14,15 @@ from PIL import Image
 import base64
 from datetime import datetime
 import pandas as pd
+import time
+
+# Import real-time face recognition module
+try:
+    from realtime_face_recognition import load_face_recognition_model, recognize_faces_in_frame
+    REALTIME_MODULE_AVAILABLE = True
+except ImportError:
+    REALTIME_MODULE_AVAILABLE = False
+    st.warning("Real-time recognition module not available")
 
 # Page configuration
 st.set_page_config(
@@ -529,7 +538,8 @@ def main_dashboard():
         # Navigation with icons
         page = st.radio("Choose a feature:", [
             "🔍 Criminal Detection",
-            "👥 Find Missing People", 
+            "👥 Find Missing People",
+            "📹 Real-Time Recognition",
             "📝 Register Criminal",
             "📋 Register Missing Person",
             "📊 View Database",
@@ -574,6 +584,8 @@ def main_dashboard():
         criminal_detection_page()
     elif "Find Missing People" in page:
         missing_people_page()
+    elif "Real-Time Recognition" in page:
+        realtime_recognition_page()
     elif "Register Criminal" in page:
         register_criminal_page()
     elif "Register Missing Person" in page:
@@ -850,6 +862,99 @@ def missing_people_page():
         - Ensure faces are clearly visible
         - Avoid blurry or low-quality images
         - Multiple faces can be searched at once
+        """)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+
+def realtime_recognition_page():
+    """Real-time face recognition page with camera input"""
+    st.markdown('<div class="feature-card fade-in">', unsafe_allow_html=True)
+    st.markdown("## 📹 Real-Time Face Recognition")
+    st.markdown("Use your camera to recognize faces in real-time")
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    if not REALTIME_MODULE_AVAILABLE:
+        st.error("❌ Real-time recognition module is not available. Please check the installation.")
+        return
+    
+    # Load model once at the start
+    if 'model' not in st.session_state or 'names' not in st.session_state:
+        with st.spinner("🔄 Loading face recognition model..."):
+            st.session_state.model, st.session_state.names = load_face_recognition_model()
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown('<div class="feature-card">', unsafe_allow_html=True)
+        st.markdown("### 📷 Camera Input")
+        
+        # Camera input
+        picture = st.camera_input("📹 Take a photo for face recognition", 
+                                 help="Click the camera button to capture an image")
+        
+        if picture is not None:
+            # Convert to OpenCV format
+            bytes_data = picture.getvalue()
+            nparr = np.frombuffer(bytes_data, np.uint8)
+            img_cv = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            # Display captured image
+            st.image(picture, caption="📷 Captured Image", use_column_width=True)
+            
+            # Recognize faces
+            if st.button("🔍 Recognize Faces", use_container_width=True):
+                if st.session_state.model is not None:
+                    with st.spinner("🤖 Recognizing faces..."):
+                        # Process the image
+                        result_frame, recognized = recognize_faces_in_frame(
+                            st.session_state.model, 
+                            st.session_state.names, 
+                            img_cv.copy()
+                        )
+                        
+                        # Convert back to RGB for display
+                        result_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
+                        st.image(result_rgb, caption="🎯 Recognition Result", use_column_width=True)
+                        
+                        # Show recognition results
+                        if recognized:
+                            st.success(f"✅ Recognized {len(recognized)} person(s)!")
+                        else:
+                            st.info("ℹ️ No recognized faces found")
+                else:
+                    st.error("❌ Face recognition model is not loaded. Please register some persons first.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown('<div class="feature-card">', unsafe_allow_html=True)
+        st.markdown("### ℹ️ Information")
+        
+        # Show registered persons
+        if st.session_state.names:
+            st.markdown("### 👥 Registered Persons:")
+            for person_id, name in st.session_state.names.items():
+                st.markdown(f"- **{name}**")
+        else:
+            st.warning("⚠️ No persons registered yet")
+            st.markdown("Go to 'Register Criminal' or 'Register Missing Person' to add faces to the database.")
+        
+        st.markdown("---")
+        st.markdown("### 📖 How to use:")
+        st.markdown("""
+        1. Click the camera button
+        2. Allow camera access
+        3. Capture your image
+        4. Click "Recognize Faces"
+        5. See recognition results
+        """)
+        
+        st.markdown("### 💡 Tips:")
+        st.markdown("""
+        - Good lighting improves results
+        - Face the camera directly
+        - Stay still while capturing
+        - At least 5 images per person needed for training
         """)
         
         st.markdown('</div>', unsafe_allow_html=True)

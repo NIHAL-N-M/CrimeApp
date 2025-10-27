@@ -16,6 +16,7 @@ def train_model():
     for (subdirs, dirs, files) in os.walk(fn_dir):
         # Loop through each folder named 
         for subdir in dirs:
+            names[id] = subdir  # Store folder name (person name) with id
             subjectpath = os.path.join(fn_dir, subdir) # face-sample/1st name
             # Loop through each photo in the folder
             # os. listdir() method in python is used to get the list of all files and directories in the specified directory.
