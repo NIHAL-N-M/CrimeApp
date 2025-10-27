@@ -1053,10 +1053,20 @@ def realtime_recognition_page():
         st.error("❌ Real-time recognition module is not available. Please check the installation.")
         return
     
-    # Load model once at the start
+    # Load model once at the start using the working system
     if 'model' not in st.session_state or 'names' not in st.session_state:
         with st.spinner("🔄 Loading face recognition model..."):
-            st.session_state.model, st.session_state.names = load_face_recognition_model()
+            try:
+                from facerec import train_model
+                st.session_state.model, st.session_state.names = train_model()
+                if st.session_state.model is None:
+                    st.error("❌ Failed to load face recognition model")
+                else:
+                    st.success(f"✅ Model loaded with {len(st.session_state.names)} persons")
+            except Exception as e:
+                st.error(f"❌ Error loading model: {e}")
+                st.session_state.model = None
+                st.session_state.names = {}
     
     col1, col2 = st.columns([2, 1])
     
@@ -1081,27 +1091,43 @@ def realtime_recognition_page():
             if st.button("🔍 Recognize Faces", use_container_width=True):
                 if st.session_state.model is not None:
                     with st.spinner("🤖 Recognizing faces..."):
-                        # Process the image
-                        result_frame, recognized, all_detections = recognize_faces_in_frame(
-                            st.session_state.model, 
-                            st.session_state.names, 
-                            img_cv.copy()
-                        )
-                        
-                        # Convert back to RGB for display
-                        result_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
-                        st.image(result_rgb, caption="🎯 Recognition Result", use_container_width=True)
-                        
-                        # Show recognition results
-                        if len(recognized) > 0:
-                            st.success(f"✅ Recognized {len(recognized)} person(s)!")
-                            # Display details of recognized persons
-                            for person in recognized:
-                                st.markdown(f"**{person['name']}** (Confidence: {person['confidence']:.2f})")
-                        elif len(all_detections) > 0:
-                            st.warning(f"⚠️ Detected {len(all_detections)} face(s) but none matched the database")
-                        else:
-                            st.info("ℹ️ No faces detected in the image")
+                        try:
+                            from facerec import recognize_face
+                            from face_detection import detect_faces
+                            
+                            # Convert to grayscale for face detection
+                            gray_img = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+                            
+                            # Detect faces
+                            face_coords = detect_faces(gray_img)
+                            
+                            if len(face_coords) > 0:
+                                # Recognize faces using the working system
+                                (result_frame, recognized) = recognize_face(
+                                    st.session_state.model, 
+                                    img_cv, 
+                                    gray_img, 
+                                    face_coords, 
+                                    st.session_state.names
+                                )
+                                
+                                # Convert back to RGB for display
+                                result_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
+                                st.image(result_rgb, caption="🎯 Recognition Result", use_container_width=True)
+                                
+                                # Show recognition results
+                                if len(recognized) > 0:
+                                    st.success(f"✅ Recognized {len(recognized)} person(s)!")
+                                    # Display details of recognized persons
+                                    for person in recognized:
+                                        st.markdown(f"**{person[0]}** (Confidence: {100-person[1]:.1f}%)")
+                                else:
+                                    st.info("ℹ️ No faces recognized")
+                            else:
+                                st.warning("⚠️ No faces detected in the image")
+                                
+                        except Exception as e:
+                            st.error(f"❌ Error during recognition: {e}")
                 else:
                     st.error("❌ Face recognition model is not loaded. Please register some persons first.")
         
