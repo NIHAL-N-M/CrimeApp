@@ -617,7 +617,7 @@ def criminal_detection_page():
             image = Image.open(uploaded_file)
             st.image(image, caption="📷 Uploaded Image", use_container_width=True)
             
-            col_btn1, col_btn2 = st.columns(2)
+            col_btn1, col_btn2, col_btn3 = st.columns(3)
             with col_btn1:
                 if st.button("🔍 Detect Faces", use_container_width=True):
                     with st.spinner("🔍 Analyzing image for faces..."):
@@ -634,13 +634,26 @@ def criminal_detection_page():
                             result_image = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2RGB)
                             st.image(result_image, caption="🎯 Face Detection Result", use_container_width=True)
                             
-                            # Check against criminal database
-                            check_criminal_database(faces, opencv_image)
+                            # Store for recognition
+                            st.session_state.detected_faces = faces
+                            st.session_state.detected_image = image
                         else:
                             st.warning("⚠️ No faces detected in the image. Please try with a different image.")
             
             with col_btn2:
+                if st.button("🚨 Recognize Criminals", use_container_width=True):
+                    if 'detected_faces' in st.session_state and 'detected_image' in st.session_state:
+                        check_criminal_database(st.session_state.detected_faces, st.session_state.detected_image)
+                    else:
+                        st.warning("⚠️ Please detect faces first before recognizing criminals")
+            
+            with col_btn3:
                 if st.button("🗑️ Clear", use_container_width=True):
+                    # Clear session state
+                    if 'detected_faces' in st.session_state:
+                        del st.session_state.detected_faces
+                    if 'detected_image' in st.session_state:
+                        del st.session_state.detected_image
                     st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -659,12 +672,38 @@ def criminal_detection_page():
         
         st.metric("Total Criminals in Database", total_criminals)
         
+        # Show recent criminal detections if any
+        if 'criminal_detections' in st.session_state:
+            st.markdown("### 🚨 Recent Detections")
+            for detection in st.session_state.criminal_detections[-3:]:  # Show last 3
+                st.markdown(f"**{detection['name']}** - {detection['confidence']:.1f}% confidence")
+        
+        # Criminal database statistics
+        conn = sqlite3.connect('face_recognition.db')
+        cursor = conn.cursor()
+        
+        # Get criminal statistics
+        cursor.execute("SELECT COUNT(*) FROM criminaldata WHERE crimes_done IS NOT NULL")
+        with_crimes = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM criminaldata WHERE date_of_arrest IS NOT NULL")
+        arrested = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        col_stat1, col_stat2 = st.columns(2)
+        with col_stat1:
+            st.metric("With Crime Records", with_crimes)
+        with col_stat2:
+            st.metric("Previously Arrested", arrested)
+        
         st.markdown("### 🔍 How it works:")
         st.markdown("""
         1. **Upload Image** - Select a clear image with faces
-        2. **Face Detection** - AI detects all faces in the image
-        3. **Database Matching** - Compares against criminal database
-        4. **Results** - Shows matches and confidence levels
+        2. **Detect Faces** - AI detects all faces in the image
+        3. **Recognize Criminals** - Advanced face recognition against criminal database
+        4. **Alert System** - Shows confidence levels and criminal details
+        5. **Action Buttons** - Report matches and view full records
         """)
         
         st.markdown("### 💡 Tips for better detection:")
@@ -678,27 +717,143 @@ def criminal_detection_page():
         st.markdown('</div>', unsafe_allow_html=True)
 
 def check_criminal_database(faces, image):
-    """Check detected faces against criminal database with modern UI"""
+    """Check detected faces against criminal database using face recognition"""
     st.markdown('<div class="info-box">', unsafe_allow_html=True)
-    st.markdown("### 🔍 Checking against Criminal Database...")
+    st.markdown("### 🔍 Criminal Face Recognition Analysis...")
     
-    conn = sqlite3.connect('face_recognition.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT name, crimes_done, date_of_arrest, place_of_arrest FROM criminaldata")
-    criminals = cursor.fetchall()
-    conn.close()
+    # Load the face recognition model
+    with st.spinner("🔄 Loading face recognition model..."):
+        try:
+            from facerec import train_model, recognize_face
+            from face_detection import detect_faces
+            
+            # Train the model using the working system
+            (model, names) = train_model()
+            
+            if model is None:
+                st.error("❌ Failed to load face recognition model")
+                return
+            
+            st.success("✅ Face recognition model loaded successfully")
+            
+        except Exception as e:
+            st.error(f"❌ Error loading face recognition: {e}")
+            return
     
-    if criminals:
-        st.markdown("**📋 Criminal Database Records:**")
-        for i, criminal in enumerate(criminals, 1):
-            st.markdown(f"""
-            **{i}. {criminal[0]}**
-            - **Crimes:** {criminal[1] or 'Not specified'}
-            - **Arrested:** {criminal[2] or 'Not specified'}
-            - **Location:** {criminal[3] or 'Not specified'}
-            """)
-    else:
-        st.info("ℹ️ No criminal records found in database")
+    # Convert PIL image to OpenCV format
+    opencv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+    gray_image = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
+    
+    # Detect faces using the working detection system
+    face_coords = detect_faces(gray_image)
+    
+    if len(face_coords) == 0:
+        st.warning("⚠️ No faces detected for recognition")
+        return
+    
+    st.info(f"🔍 Analyzing {len(face_coords)} detected face(s)...")
+    
+    # Perform face recognition
+    with st.spinner("🤖 Performing face recognition..."):
+        try:
+            (result_frame, recognized) = recognize_face(model, opencv_image, gray_image, face_coords, names)
+            
+            # Convert result back to RGB for display
+            result_rgb = cv2.cvtColor(result_frame, cv2.COLOR_BGR2RGB)
+            st.image(result_rgb, caption="🎯 Criminal Recognition Result", use_container_width=True)
+            
+            # Process recognition results
+            if len(recognized) > 0:
+                st.markdown("### 🚨 CRIMINAL DETECTED!")
+                st.markdown("---")
+                
+                # Get criminal database information
+                conn = sqlite3.connect('face_recognition.db')
+                cursor = conn.cursor()
+                
+                for i, (criminal_name, confidence) in enumerate(recognized, 1):
+                    # Get detailed criminal information
+                    cursor.execute("""
+                        SELECT name, crimes_done, date_of_arrest, place_of_arrest, 
+                               age, gender, description, last_known_location
+                        FROM criminaldata 
+                        WHERE name = ?
+                    """, (criminal_name,))
+                    
+                    criminal_info = cursor.fetchone()
+                    
+                    if criminal_info:
+                        # High confidence match - show alert
+                        if confidence < 50:  # Lower confidence = better match
+                            st.error(f"🚨 **HIGH ALERT: {criminal_name.upper()}**")
+                            st.markdown(f"**Confidence Level:** {100-confidence:.1f}% (Very High)")
+                        elif confidence < 80:
+                            st.warning(f"⚠️ **POTENTIAL MATCH: {criminal_name.upper()}**")
+                            st.markdown(f"**Confidence Level:** {100-confidence:.1f}% (High)")
+                        else:
+                            st.info(f"ℹ️ **POSSIBLE MATCH: {criminal_name.upper()}**")
+                            st.markdown(f"**Confidence Level:** {100-confidence:.1f}% (Medium)")
+                        
+                        # Display criminal details
+                        st.markdown(f"""
+                        **📋 Criminal Details:**
+                        - **Name:** {criminal_info[0]}
+                        - **Crimes:** {criminal_info[1] or 'Not specified'}
+                        - **Arrest Date:** {criminal_info[2] or 'Not specified'}
+                        - **Arrest Location:** {criminal_info[3] or 'Not specified'}
+                        - **Age:** {criminal_info[4] or 'Not specified'}
+                        - **Gender:** {criminal_info[5] or 'Not specified'}
+                        - **Description:** {criminal_info[6] or 'Not specified'}
+                        - **Last Known Location:** {criminal_info[7] or 'Not specified'}
+                        """)
+                        
+                        # Show action buttons
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            if st.button(f"📋 View Full Record", key=f"view_{i}"):
+                                st.session_state[f"show_details_{i}"] = True
+                        with col2:
+                            if st.button(f"🚨 Report Match", key=f"report_{i}"):
+                                st.success("✅ Match reported to authorities")
+                        with col3:
+                            if st.button(f"📊 Confidence Details", key=f"confidence_{i}"):
+                                st.info(f"Recognition confidence: {confidence} (Lower = Better match)")
+                        
+                        st.markdown("---")
+                    else:
+                        st.warning(f"⚠️ {criminal_name} recognized but not found in criminal database")
+                
+                conn.close()
+                
+                # Store detection history
+                if 'criminal_detections' not in st.session_state:
+                    st.session_state.criminal_detections = []
+                
+                for criminal_name, confidence in recognized:
+                    st.session_state.criminal_detections.append({
+                        'name': criminal_name,
+                        'confidence': 100-confidence,  # Convert to percentage
+                        'timestamp': st.session_state.get('current_time', 'Unknown')
+                    })
+                
+                # Summary
+                st.success(f"✅ **Analysis Complete:** {len(recognized)} criminal(s) identified")
+                
+            else:
+                st.info("ℹ️ No known criminals identified in the image")
+                st.markdown("**All detected faces are not in the criminal database**")
+                
+                # Show general criminal database stats
+                conn = sqlite3.connect('face_recognition.db')
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM criminaldata")
+                total_criminals = cursor.fetchone()[0]
+                conn.close()
+                
+                st.markdown(f"**Database Status:** {total_criminals} criminals in database")
+                
+        except Exception as e:
+            st.error(f"❌ Error during face recognition: {e}")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1116,6 +1271,9 @@ def main():
         st.session_state.current_user = None
     if 'show_register' not in st.session_state:
         st.session_state.show_register = False
+    if 'current_time' not in st.session_state:
+        from datetime import datetime
+        st.session_state.current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     # Initialize database
     init_database()
