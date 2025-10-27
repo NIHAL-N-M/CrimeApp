@@ -906,7 +906,7 @@ def realtime_recognition_page():
                 if st.session_state.model is not None:
                     with st.spinner("🤖 Recognizing faces..."):
                         # Process the image
-                        result_frame, recognized = recognize_faces_in_frame(
+                        result_frame, recognized, all_detections = recognize_faces_in_frame(
                             st.session_state.model, 
                             st.session_state.names, 
                             img_cv.copy()
@@ -917,10 +917,15 @@ def realtime_recognition_page():
                         st.image(result_rgb, caption="🎯 Recognition Result", use_container_width=True)
                         
                         # Show recognition results
-                        if recognized:
+                        if len(recognized) > 0:
                             st.success(f"✅ Recognized {len(recognized)} person(s)!")
+                            # Display details of recognized persons
+                            for person in recognized:
+                                st.markdown(f"**{person['name']}** (Confidence: {person['confidence']:.2f})")
+                        elif len(all_detections) > 0:
+                            st.warning(f"⚠️ Detected {len(all_detections)} face(s) but none matched the database")
                         else:
-                            st.info("ℹ️ No recognized faces found")
+                            st.info("ℹ️ No faces detected in the image")
                 else:
                     st.error("❌ Face recognition model is not loaded. Please register some persons first.")
         
