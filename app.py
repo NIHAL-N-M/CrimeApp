@@ -714,6 +714,24 @@ def criminal_detection_page():
         - Multiple faces can be detected at once
         """)
         
+        # Show current training data
+        st.markdown("### 🎯 Current Training Data:")
+        try:
+            from facerec import train_model
+            (model, names) = train_model()
+            if names:
+                st.success(f"✅ Model trained with {len(names)} persons:")
+                for person_id, name in names.items():
+                    st.markdown(f"- **{name}** (ID: {person_id})")
+                
+                # Test button
+                if st.button("🧪 Test Face Recognition", use_container_width=True):
+                    st.info("💡 Upload an image with faces and click 'Recognize Criminals' to test the system!")
+            else:
+                st.warning("⚠️ No training data available")
+        except Exception as e:
+            st.error(f"❌ Error loading training data: {e}")
+        
         st.markdown('</div>', unsafe_allow_html=True)
 
 def check_criminal_database(faces, image):
