@@ -51,8 +51,11 @@ def load_face_recognition_model():
             images = np.array(images)
             labels = np.array(labels)
             model.train(images, labels)
+            print(f"Model trained with {len(images)} images for {len(names)} persons")
+            print(f"Names dictionary: {names}")
             return (model, names)
         else:
+            print("No training images found")
             return (None, {})
     
     except Exception as e:
@@ -97,8 +100,9 @@ def recognize_faces_in_frame(model, names, frame):
             print(f"Prediction: label={label}, confidence={confidence}, names={names}")
             
             # Lower confidence = better match (LBPH returns 0 for perfect match)
-            # Use more lenient threshold for better recognition
-            if confidence < 100 and label in names:
+            # Use very lenient threshold for better recognition
+            # LBPH typically returns values 0-200, where 0 is perfect match
+            if confidence < 150 and label in names:
                 person_name = names[label]
                 recognized_persons.append({
                     'name': person_name,
@@ -112,10 +116,11 @@ def recognize_faces_in_frame(model, names, frame):
                 cv2.putText(frame, person_name, (x, y-10), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
             else:
-                # Draw red box for unrecognized person
-                cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
-                cv2.putText(frame, 'Unknown', (x, y-10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
+                # Draw blue box for detected but not recognized person
+                cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
+                cv2.putText(frame, f'Face {len(recognized_persons)+1}', (x, y-10), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+                print(f"Face detected but not recognized: confidence={confidence}, threshold=150")
         except Exception as e:
             print(f"Error predicting: {e}")
             # Draw yellow box for error
