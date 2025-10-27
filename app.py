@@ -1104,12 +1104,20 @@ def view_database_page():
 
 def main():
     """Main application function"""
+    # Initialize session state variables
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    if 'current_user' not in st.session_state:
+        st.session_state.current_user = None
+    if 'show_register' not in st.session_state:
+        st.session_state.show_register = False
+    
     # Initialize database
     init_database()
     
     # Check if user is authenticated
     if not st.session_state.authenticated:
-        if hasattr(st.session_state, 'show_register') and st.session_state.show_register:
+        if st.session_state.show_register:
             register_page()
         else:
             login_page()
