@@ -1,3 +1,246 @@
+import os
+import time
+import tempfile
+import cv2
+import numpy as np
+import streamlit as st
+
+
+@st.cache_resource
+def load_cascade():
+	# Prefer project cascades
+	candidates = [
+		"haarcascade_frontalface_default.xml",
+		"face_cascade.xml",
+	]
+	for name in candidates:
+		if os.path.exists(name):
+			cascade = cv2.CascadeClassifier(name)
+			if not cascade.empty():
+				return cascade
+	# Fallback to OpenCV data
+	opencv_data = getattr(cv2.data, "haarcascades", None)
+	if opencv_data:
+		path = os.path.join(opencv_data, "haarcascade_frontalface_default.xml")
+		cascade = cv2.CascadeClassifier(path)
+		if not cascade.empty():
+			return cascade
+	return None
+
+
+def detect_faces_bgr(frame_bgr, face_detector):
+	gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+	faces = face_detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+	for (x, y, w, h) in faces:
+		cv2.rectangle(frame_bgr, (x, y), (x + w, y + h), (0, 255, 0), 2)
+	return frame_bgr, faces
+
+
+def process_image(uploaded_file, face_detector):
+	file_bytes = np.frombuffer(uploaded_file.read(), np.uint8)
+	img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+	if img_bgr is None:
+		st.error("Could not read the image. Please upload a valid image file.")
+		return
+	boxed_bgr, faces = detect_faces_bgr(img_bgr, face_detector)
+	st.write(f"Detected {len(faces)} face(s)")
+	st.image(cv2.cvtColor(boxed_bgr, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
+
+
+def process_video(uploaded_file, face_detector):
+	with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+		tmp.write(uploaded_file.read())
+		tmp_path = tmp.name
+
+\tcap = cv2.VideoCapture(tmp_path)
+	placeholder = st.empty()
+	info = st.empty()
+	frame_count = 0
+	faces_total = 0
+	start = time.time()
+	while True:
+		ret, frame = cap.read()
+		if not ret:
+			break
+		frame_count += 1
+		boxed_bgr, faces = detect_faces_bgr(frame, face_detector)
+		faces_total += len(faces)
+		placeholder.image(cv2.cvtColor(boxed_bgr, cv2.COLOR_BGR2RGB), channels="RGB")
+		info.write(f"Frames: {frame_count} | Faces detected (cumulative): {faces_total}")
+		time.sleep(0.01)
+	cap.release()
+	os.unlink(tmp_path)
+	st.success(f"Done. Processed {frame_count} frames, detected {faces_total} faces cumulatively in {time.time() - start:.2f}s")
+
+
+def process_webcam(face_detector):
+	cap = cv2.VideoCapture(0)
+	if not cap.isOpened():
+		st.error("Webcam not available.")
+		return
+	st.info("Streaming webcam. Click Stop to end.")
+	placeholder = st.empty()
+	stop = st.button("Stop", type="primary")
+	while True:
+		ret, frame = cap.read()
+		if not ret:
+			break
+		boxed_bgr, faces = detect_faces_bgr(frame, face_detector)
+		placeholder.image(cv2.cvtColor(boxed_bgr, cv2.COLOR_BGR2RGB), channels="RGB")
+		if stop:
+			break
+	cap.release()
+
+
+@st.cache_resource
+def train_lbph_model():
+	# Prefer face_samples2, fallback to face_samples
+	dataset_dirs = ["face_samples2", "face_samples"]
+	dataset_dir = None
+	for d in dataset_dirs:
+		if os.path.isdir(d):
+			dataset_dir = d
+			break
+	if dataset_dir is None:
+		return None, {}
+
+	model = cv2.face.LBPHFaceRecognizer_create()
+	images = []
+	labels = []
+	names = {}
+	label_id = 0
+	valid_exts = {".png", ".jpg", ".jpeg", ".pgm"}
+
+	for subdir in sorted([d for d in os.listdir(dataset_dir) if os.path.isdir(os.path.join(dataset_dir, d))]):
+		subject_path = os.path.join(dataset_dir, subdir)
+		file_list = [f for f in os.listdir(subject_path) if os.path.splitext(f)[1].lower() in valid_exts]
+		if not file_list:
+			continue
+		names[label_id] = subdir
+		for filename in file_list:
+			path = os.path.join(subject_path, filename)
+			img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+			if img is None:
+				continue
+			img = cv2.resize(img, (112, 92))
+			images.append(img)
+			labels.append(label_id)
+		label_id += 1
+
+	if not images:
+		return None, {}
+
+	images_np = np.array(images)
+	labels_np = np.array(labels)
+	model.train(images_np, labels_np)
+	return model, names
+
+
+def recognize_faces_in_frame(frame_bgr, face_detector, model, names, confidence_threshold=80.0):
+	gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+	faces = face_detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+	recognized = []
+	for (x, y, w, h) in faces:
+		roi = gray[y:y+h, x:x+w]
+		roi_resized = cv2.resize(roi, (112, 92))
+		pred_id, conf = model.predict(roi_resized)
+		name = names.get(pred_id, "Unknown")
+		label = name if conf <= confidence_threshold else "Unknown"
+		color = (0, 200, 0) if label != "Unknown" else (0, 0, 255)
+		cv2.rectangle(frame_bgr, (x, y), (x + w, y + h), color, 2)
+		cv2.putText(frame_bgr, f"{label} ({conf:.1f})", (x, y - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+		recognized.append((label, conf))
+	return frame_bgr, recognized
+
+
+def real_time_recognition_ui(face_detector):
+	st.subheader("Real-Time Face Recognition")
+	with st.spinner("Training LBPH model from dataset..."):
+		model, names = train_lbph_model()
+	if model is None or not names:
+		st.error("No training data found. Ensure 'face_samples2' or 'face_samples' contains labeled subfolders with face images.")
+		return
+
+	# Try using browser camera
+	image_from_camera = None
+	try:
+		image_from_camera = st.camera_input("Take a photo")
+	except Exception:
+		image_from_camera = None
+
+	if image_from_camera is not None:
+		file_bytes = np.frombuffer(image_from_camera.getvalue(), np.uint8)
+		img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+		if img_bgr is None:
+			st.error("Could not decode captured image.")
+			return
+		out_bgr, recognized = recognize_faces_in_frame(img_bgr, face_detector, model, names)
+		st.image(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
+		if recognized:
+			st.success("Detected: " + ", ".join({r[0] for r in recognized}))
+		else:
+			st.info("No known person recognized.")
+		return
+
+	# Fallback to local webcam preview + take photo
+	cap = cv2.VideoCapture(0)
+	if not cap.isOpened():
+		st.error("Webcam not available. Try browser camera above if supported.")
+		return
+	preview = st.empty()
+	col1, col2 = st.columns(2)
+	shoot = col1.button("Take Photo", type="primary")
+	stop = col2.button("Stop Preview")
+	frame_to_eval = None
+	while True:
+		ret, frame = cap.read()
+		if not ret:
+			break
+		preview.image(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB), channels="RGB")
+		if shoot:
+			frame_to_eval = frame.copy()
+			break
+		if stop:
+			break
+	cap.release()
+
+	if frame_to_eval is not None:
+		out_bgr, recognized = recognize_faces_in_frame(frame_to_eval, face_detector, model, names)
+		st.image(cv2.cvtColor(out_bgr, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
+		if recognized:
+			st.success("Detected: " + ", ".join({r[0] for r in recognized}))
+		else:
+			st.info("No known person recognized.")
+
+
+def main():
+	st.set_page_config(page_title="Face Detection & Recognition", layout="wide")
+	st.title("Face Detection & Recognition - Local (Streamlit)")
+	st.caption("Upload media, use webcam preview, or take a photo for real-time recognition against your dataset.")
+
+	face_detector = load_cascade()
+	if face_detector is None or face_detector.empty():
+		st.error("Failed to load Haar cascade. Ensure 'haarcascade_frontalface_default.xml' or 'face_cascade.xml' exists.")
+		return
+
+	mode = st.sidebar.radio("Mode", ("Image", "Video", "Webcam", "Real-Time Recognition"))
+
+	if mode == "Image":
+		uploaded = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
+		if uploaded is not None:
+			process_image(uploaded, face_detector)
+
+	elif mode == "Video":
+		uploaded = st.file_uploader("Upload a video (mp4, avi, mkv)", type=["mp4", "avi", "mkv"])
+		if uploaded is not None:
+			process_video(uploaded, face_detector)
+
+	elif mode == "Webcam":
+		process_webcam(face_detector)
+
+	else:
+		real_time_recognition_ui(face_detector)
+
 #!/usr/bin/env python3
 """
 Face Recognition Web Application
