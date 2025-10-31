@@ -4,6 +4,8 @@ import tempfile
 import cv2
 import numpy as np
 import streamlit as st
+import pymysql
+import pandas as pd
 
 
 @st.cache_resource
@@ -31,10 +33,13 @@ def train_criminal_lbph_model():
 	dataset_dir = "face_samples"
 	if not os.path.isdir(dataset_dir):
 		return None, {}
-	model = cv2.face.LBPHFaceRecognizer_create()
+	# Ensure OpenCV contrib (cv2.face) is available
+	if not hasattr(cv2, "face") or not hasattr(cv2.face, "LBPHFaceRecognizer_create"):
+		return None, {}
+        model = cv2.face.LBPHFaceRecognizer_create()
 	images = []
 	labels = []
-	names = {}
+        names = {}
 	label_id = 0
 	valid_exts = {".png", ".jpg", ".jpeg", ".pgm"}
 	for subdir in sorted([d for d in os.listdir(dataset_dir) if os.path.isdir(os.path.join(dataset_dir, d))]):
@@ -95,7 +100,10 @@ def image_mode(face_detector):
 def real_time_recognition(face_detector):
 	with st.spinner("Training LBPH model on criminal dataset (face_samples)..."):
 		model, names = train_criminal_lbph_model()
-	if model is None or not names:
+	if model is None:
+		st.error("LBPH model (cv2.face) is unavailable. Ensure opencv-contrib-python is installed and not overridden by opencv-python.")
+		return
+	if not names:
 		st.error("No training data found in 'face_samples'. Ensure it contains subfolders per person with face images.")
 		return
 	# Prefer browser camera
@@ -114,7 +122,7 @@ def real_time_recognition(face_detector):
 		st.image(cv2.cvtColor(out, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
 		if rec:
 			st.success("Detected: " + ", ".join({r[0] for r in rec}))
-		else:
+                    else:
 			st.info("No known person recognized.")
 		return
 	# Fallback to local webcam preview and shoot
@@ -143,7 +151,7 @@ def real_time_recognition(face_detector):
 		st.image(cv2.cvtColor(out, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
 		if rec:
 			st.success("Detected: " + ", ".join({r[0] for r in rec}))
-		else:
+                else:
 			st.info("No known person recognized.")
 
 
@@ -155,10 +163,84 @@ def main():
 	if face_detector is None or face_detector.empty():
 		st.error("Failed to load Haar cascade. Make sure the XML file is present.")
 		return
-	mode = st.sidebar.radio("Mode", ("Real-Time Recognition", "Image (Detect Only)"))
+
+	st.sidebar.subheader("Modes")
+	mode = st.sidebar.radio("Mode", ("Real-Time Recognition", "Image (Detect Only)", "Criminal Database"))
 	if mode == "Real-Time Recognition":
 		real_time_recognition(face_detector)
 	else:
-		image_mode(face_detector)
+		if mode == "Image (Detect Only)":
+			image_mode(face_detector)
+                else:
+			criminal_database_ui()
+
+
+def criminal_database_ui():
+	st.subheader("Criminal Database (MySQL)")
+        col1, col2 = st.columns(2)
+        with col1:
+		host = st.text_input("Host", value="localhost")
+		user = st.text_input("User", value="root")
+		password = st.text_input("Password", value="", type="password")
+		database = st.text_input("Database", value="criminaldb")
+		connect = st.button("Connect")
+	
+	if 'db_params' not in st.session_state:
+		st.session_state.db_params = None
+
+	if connect:
+		st.session_state.db_params = dict(host=host, user=user, password=password, database=database)
+
+	params = st.session_state.db_params
+	if not params:
+		st.info("Enter connection details and click Connect to view records.")
+                return
+            
+	try:
+		conn = pymysql.connect(**params)
+        except Exception as e:
+		st.error(f"Could not connect to database: {e}")
+            return
+    
+	with conn:
+		try:
+			df = pd.read_sql("SELECT `Criminal-ID` as criminal_id, `Name` as name, `Address` as address, `Phone` as phone FROM criminaldata", conn)
+        except Exception as e:
+			st.error(f"Failed to load records. Ensure you imported table.sql. Error: {e}")
+        return
+    
+	st.success(f"Loaded {len(df)} records from criminaldata")
+	st.dataframe(df, use_container_width=True)
+        
+        st.markdown("---")
+	st.subheader("Add Training Images to face_samples")
+	st.caption("Pick a criminal name (or type a new one) and upload face images to improve recognition.")
+
+	existing_names = sorted([d for d in os.listdir('face_samples')]) if os.path.isdir('face_samples') else []
+	name_choice = st.selectbox("Select existing name", options=[""] + existing_names)
+	new_name = st.text_input("Or enter a new name")
+	final_name = new_name.strip() if new_name.strip() else name_choice.strip()
+	uploads = st.file_uploader("Upload face images", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+	save_btn = st.button("Save Images")
+
+	if save_btn:
+		if not final_name:
+			st.error("Please select or enter a name.")
+			return
+		if not uploads:
+			st.error("Please upload at least one image.")
+			return
+		person_dir = os.path.join('face_samples', final_name)
+		os.makedirs(person_dir, exist_ok=True)
+		saved = 0
+		for i, up in enumerate(uploads, start=1):
+			data = np.frombuffer(up.read(), np.uint8)
+			img = cv2.imdecode(data, cv2.IMREAD_GRAYSCALE)
+			if img is None:
+				continue
+			img = cv2.resize(img, (112, 92))
+			cv2.imwrite(os.path.join(person_dir, f"{int(time.time())}_{i}.png"), img)
+			saved += 1
+		st.success(f"Saved {saved} image(s) to {person_dir}")
 
 
